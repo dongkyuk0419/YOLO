@@ -29,11 +29,13 @@
 # Library and Function Imports
 import tensorflow as tf 
 import keras
+from keras import optimizers
 from keras.models import Model
 from keras.layers import Conv2D, Dense, Activation, MaxPooling2D
 from keras.layers import BatchNormalization, LeakyReLU, Lambda, Input
 from keras.layers.merge import concatenate
 from data_load import load_data
+from keras.callbacks import LearningRateScheduler
 
 # Data Load
 ann_dir = '/home/dongkyu/VOC2012/Annotations/'
@@ -74,6 +76,13 @@ def convblock3(filters,input):
 def reorg(x):
 	return tf.space_to_depth(x,2)
 
+def lr_adaptive(self,epoch):
+    if epoch > 60:
+        lr = 1e-4
+    if epoch > 90:
+        lr = 1e-5
+    return lr
+
 # Model
 #
 # We obtained details about the yolov2 structure on
@@ -86,6 +95,8 @@ S = 13
 box = 5
 classes = len(labels)
 out = (5+classes)*box
+learing_rate = 1e-3
+epochs = 160
 
 # YOLOv2 Model
 input = Input(shape=(I_h,I_h,3))
@@ -110,4 +121,28 @@ YOLO.summary()
 def multiartloss(y,y_hat):
 
 
+
+
+
+optimizer = optimizers.SGD(lr,0.9,0.0005)
+#optimizer = SGD(lr=1e-4, decay=0.0005, momentum=0.9)
 YOLO.compile(optimizer,loss=multipartloss)
+YOLO.fit
+YOLO.fit_generator(epochs = epochs,
+	callbacks=[LearningRateScheduler(lr_adaptive)]
+	)
+
+
+
+
+            self.optim = optimizers.Adam(learning_rate)
+        self.model.compile(self.optim,'categorical_crossentropy',['accuracy'])
+        self.datagen = keras.preprocessing.image.ImageDataGenerator(
+            horizontal_flip = True,fill_mode = 'constant',
+            width_shift_range = 4, height_shift_range = 4
+            )
+        self.datagen.fit(self.data.X_train)
+        self.model.fit_generator(self.datagen.flow(self.data.X_train,self.data.Y_train,
+            batch_size=self.batch_size),steps_per_epoch=len(self.data.X_train)/self.batch_size,
+            epochs=self.epochs,validation_data = (self.data.X_val,self.data.Y_val),
+            callbacks=[LearningRateScheduler(lr_adaptive)],verbose=2)
