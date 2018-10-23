@@ -106,3 +106,8 @@ x = convconv(1024,3,x)
 y = Conv2D(out,1,padding = 'same')(x)
 YOLO = Model(inputs = input, outputs = y)
 YOLO.summary()
+
+def multiartloss(y,y_hat):
+
+
+YOLO.compile(optimizer,loss=multipartloss)
