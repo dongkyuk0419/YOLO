@@ -28,6 +28,7 @@
 
 # Library and Function Imports
 import tensorflow as tf 
+import numpy as np
 import keras
 from keras import optimizers
 from keras.models import Model
@@ -35,7 +36,7 @@ from keras.layers import Conv2D, Dense, Activation, MaxPooling2D, Flatten, Resha
 from keras.layers import BatchNormalization, LeakyReLU, Lambda, Input, Dropout
 from keras.layers.merge import concatenate
 from keras.callbacks import LearningRateScheduler
-from data_load import load_data
+from data_load import load_data, DataGenerator
 #from data_infer import pretty_picture
 
 # Data Load
@@ -65,6 +66,7 @@ def convblock2(filters,input):
 	return x
 
 def lr_adaptive(self,epoch):
+    lr = 1e-3
     if epoch > 15:
     	lr = 1e-2
     if epoch > 75:
@@ -74,10 +76,16 @@ def lr_adaptive(self,epoch):
     return lr
 
 def multipartloss(y,y_hat):
-	loss_temp = tf.reduce_mean(tf.pow(y-y_hat,2),[1,2])
+	coord = 5.
+	noobj = 0.5
 
-
-	return 0
+	l = coord*tf.reduce_sum(np.multiply(np.power((y_hat[:,:,:,0:4]-y[:,:,:,0:4]),2),y[:,:,:,5]))
+	l += coord*tf.reduce_sum(np.multiply(np.power((y_hat[:,:,:,5:9]-y[:,:,:,0:4]),2),y[:,:,:,5]))
+	l+=tf.reduce_sum(np.multiply(np.power(y_hat[:,:,:,4]-y[:,:,:,4],2),y[:,:,:,5]))
+	l+=noobj*tf.reduce_sum(np.multiply(np.power(y_hat[:,:,:,9]-y[:,:,:,4],2),y[:,:,:,6]))
+	l+=tf.reduce_sum(np.multiply(np.power((y_hat[:,:,:,10:30]-y[:,:,:,10:30]),2),y[:,:,:,5]))
+	
+	return l
 
 # Model
 #
@@ -113,25 +121,26 @@ x = convconv(1024,3,2,x)
 x = convconv(1024,3,1,x)
 x = convconv(1024,3,1,x)
 x = Flatten()(x)
+x = Dense(256)(x)
 x = Dense(4096)(x)
 x = LeakyReLU(0.1)(x)
 x = Dropout(0.5)(x)
 x = Dense(S*S*out)(x)
-y = Reshape((-1,S,S,out))(x)
+y = Reshape((S,S,out))(x)
 YOLO = Model(inputs = input, outputs = y)
 YOLO.summary()
 
 optimizer = optimizers.SGD(learing_rate,0.9,0.0005)
 YOLO.compile(optimizer,loss=multipartloss)
-train_batch = get_batch(train,batch_size)
-val_batch = get_batch(val,batch_size)
+train_batch = DataGenerator(train,batch_size)
+val_batch = DataGenerator(val,batch_size)
 
 YOLO.fit_generator(
 	generator = train_batch,
-	steps_per_epoch = len(train)/batch_size,
+	steps_per_epoch = len(train_batch),
 	epochs = epochs,
 	validation_data = val_batch,
-	validation_steps = len(val)/batch_size,
+	validation_steps = len(val_batch),
 	callbacks=[LearningRateScheduler(lr_adaptive)],
 	verbose = 1
 )
