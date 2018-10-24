@@ -82,9 +82,3 @@ def load_data(ann_dir,img_dir,lab_dir,labels):
 				else:
 					val_infos += [infos_temp]
 	return train_infos, val_infos, test_infos
-
-def preprocessing(infos,S,B,C):
-
-
-
-def get_batch(infos,batch_size):

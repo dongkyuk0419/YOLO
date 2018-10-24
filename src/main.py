@@ -31,11 +31,12 @@ import tensorflow as tf
 import keras
 from keras import optimizers
 from keras.models import Model
-from keras.layers import Conv2D, Dense, Activation, MaxPooling2D
-from keras.layers import BatchNormalization, LeakyReLU, Lambda, Input
+from keras.layers import Conv2D, Dense, Activation, MaxPooling2D, Flatten, Reshape
+from keras.layers import BatchNormalization, LeakyReLU, Lambda, Input, Dropout
 from keras.layers.merge import concatenate
-from data_load import load_data
 from keras.callbacks import LearningRateScheduler
+from data_load import load_data
+#from data_infer import pretty_picture
 
 # Data Load
 ann_dir = '/home/dongkyu/VOC2012/Annotations/'
@@ -47,44 +48,36 @@ train, val, test = load_data(ann_dir,img_dir,lab_dir,labels)
 
 # Model Functions
 
-def convconv(filters,size,input):
-	x = Conv2D(filters,size,padding='same')(input)
+def convconv(filters,size,strides,input):
+	x = Conv2D(filters,size,strides = strides,padding='same')(input)
 	x = BatchNormalization()(x)
 	x = LeakyReLU(0.1)(x)
 	return x	
 
-def convblock1(filters,input):
-	x = convconv(filters,3,input)
+def convblock1(filters,size,strides,input):
+	x = convconv(filters,size,strides,input)
 	x = MaxPooling2D(strides=2)(x)
 	return x
 
 def convblock2(filters,input):
-	x = convconv(filters*2,3,input)
-	x = convconv(filters,1,x)
-	x = convconv(filters*2,3,x)
-	x = MaxPooling2D(strides=2)(x)
+	x = convconv(filters,1,1,input)
+	x = convconv(filters*2,3,1,x)
 	return x
 
-def convblock3(filters,input):
-	x = convconv(filters*2,3,input)
-	x = convconv(filters,1,x)
-	x = convconv(filters*2,3,x)
-	x = convconv(filters,1,x)
-	x = convconv(filters*2,3,x)
-	return x	
-
-def reorg(x):
-	return tf.space_to_depth(x,2)
-
 def lr_adaptive(self,epoch):
-    if epoch > 60:
+    if epoch > 15:
+    	lr = 1e-2
+    if epoch > 75:
+        lr = 1e-3
+    if epoch > 105:
         lr = 1e-4
-    if epoch > 90:
-        lr = 1e-5
     return lr
 
-def multiartloss(y,y_hat):
+def multipartloss(y,y_hat):
+	loss_temp = tf.reduce_mean(tf.pow(y-y_hat,2),[1,2])
 
+
+	return 0
 
 # Model
 #
@@ -93,42 +86,45 @@ def multiartloss(y,y_hat):
 #
 
 # Parameters
-I_h = 416
+I_h = 448
 S = 7
 B = 2
 C = len(labels)
 out = B*5+C
 learing_rate = 1e-3
-epochs = 160
+epochs = 135
 batch_size = 64
 
 # YOLOv2 Model
 input = Input(shape=(I_h,I_h,3))
-x = convblock1(32,input)
-x = convblock1(64,x)
-x = convblock2(64,x)
+x = convblock1(64,7,2,input)
+x = convblock1(192,3,1,x)
 x = convblock2(128,x)
-x = convblock3(256,x)
-passthrough = x
+x = convblock2(256,x)
 x = MaxPooling2D(strides=2)(x)
-x = convblock3(512,x)
-for i in range(0,2):
-	x = convconv(1024,3,x)
-passthrough = convconv(64,1,passthrough)
-passthrough = Lambda(reorg)(passthrough)
-x = concatenate([x,passthrough])
-x = convconv(1024,3,x)
-y = Conv2D(out,1,padding = 'same')(x)
+for i in range(0,4):
+	x = convblock2(256,x)
+x = convblock2(512,x)
+x = MaxPooling2D(strides=2)(x)
+x = convblock2(512,x)
+x = convblock2(512,x)
+x = convconv(1024,3,1,x)
+x = convconv(1024,3,2,x)
+x = convconv(1024,3,1,x)
+x = convconv(1024,3,1,x)
+x = Flatten()(x)
+x = Dense(4096)(x)
+x = LeakyReLU(0.1)(x)
+x = Dropout(0.5)(x)
+x = Dense(S*S*out)(x)
+y = Reshape((-1,S,S,out))(x)
 YOLO = Model(inputs = input, outputs = y)
-# YOLO.summary()
+YOLO.summary()
 
-optimizer = optimizers.SGD(lr,0.9,0.0005)
-
+optimizer = optimizers.SGD(learing_rate,0.9,0.0005)
 YOLO.compile(optimizer,loss=multipartloss)
 train_batch = get_batch(train,batch_size)
 val_batch = get_batch(val,batch_size)
-
-
 
 YOLO.fit_generator(
 	generator = train_batch,
@@ -138,4 +134,4 @@ YOLO.fit_generator(
 	validation_steps = len(val)/batch_size,
 	callbacks=[LearningRateScheduler(lr_adaptive)],
 	verbose = 1
-	)
+)
