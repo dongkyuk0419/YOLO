@@ -85,7 +85,6 @@ def load_data(ann_dir,img_dir,lab_dir,labels):
                     val_infos += [infos_temp]
     return train_infos, val_infos, test_infos
 
-
 # https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly
 class DataGenerator(Sequence):
     def __init__(self, infos,batch_size):
@@ -106,6 +105,7 @@ class DataGenerator(Sequence):
         y = np.zeros((self.batch_size,7,7,30))
         y[:,:,:,6] = 1
         counter = 0
+        #preprocessing
         for img in self.infos[start:end]:
             x[counter] = cv2.resize(cv2.imread(img['file']),(448,448))/255
             h_org = img['height']
@@ -136,5 +136,4 @@ class DataGenerator(Sequence):
         return x,y
         
     def on_epoch_end(self):
-        if self.shuffle:
-            np.random.shuffle(self.images)
+        np.random.shuffle(self.infos)
